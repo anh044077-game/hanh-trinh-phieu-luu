@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hành Trình Phiêu Lưu</title>
+<style>
+  :root { --ink:#24324a; --blue:#73d7ff; --gold:#ffd34e; --pink:#ff8db4; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:16px; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    color:var(--ink); background:linear-gradient(180deg,#d8f6ff 0%,#f5fcff 58%,#e4ffe5 100%);
+  }
+  .app { width:min(100%,1000px); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 12px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:clamp(22px,4vw,34px); letter-spacing:-.5px; }
+  .subtitle { margin:3px 0 0; color:#52647d; font-size:14px; }
+  .badge { background:white; border:2px solid #d5eaf3; padding:8px 12px; border-radius:999px; font-weight:800; white-space:nowrap; }
+  .gamebox { background:#fff; padding:10px; border:3px solid #d4edf7; border-radius:22px; box-shadow:0 12px 32px #416a8120; }
+  canvas { display:block; width:100%; height:auto; border-radius:14px; background:#9ee8ff; touch-action:none; }
+  .hud { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0; }
+  .stat { flex:1; min-width:100px; background:#f3fbff; border:1px solid #d9edf5; border-radius:12px; padding:9px 12px; font-weight:750; }
+  .stat span { color:#1682aa; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  button { border:0; cursor:pointer; border-radius:12px; padding:11px 15px; font:700 14px system-ui; transition:transform .08s,filter .12s; }
+  button:active { transform:scale(.97); }
+  .primary { color:#18324b; background:#ffd34e; box-shadow:0 3px 0 #e5ad24; }
+  .secondary { color:#23415a; background:#eaf7fc; border:1px solid #cde7f1; }
+  .help { margin:11px 2px 0; color:#52647d; font-size:13px; line-height:1.5; }
+  .touch { display:none; justify-content:space-between; gap:10px; margin-top:10px; }
+  .touchgroup { display:flex; gap:8px; }
+  .touch button { min-width:62px; min-height:54px; font-size:22px; background:#eaf7fc; border:1px solid #cde7f1; box-shadow:0 3px 0 #c9e2ec; touch-action:none; }
+  .touch .jump { min-width:100px; background:#ffd34e; border-color:#f0c13b; }
+  .overlay { position:fixed; inset:0; background:#1b2b4080; display:none; align-items:center; justify-content:center; padding:20px; z-index:5; }
+  .card { width:min(100%,420px); background:white; border-radius:22px; padding:25px; text-align:center; box-shadow:0 20px 60px #14243850; }
+  .card h2 { margin:0 0 8px; font-size:28px; }
+  .card p { color:#52647d; line-height:1.55; }
+  @media (max-width:650px) {
+    body { padding:10px; align-items:flex-start; }
+    .touch { display:flex; }
+    .badge { font-size:12px; }
+    .gamebox { padding:6px; border-radius:16px; }
+    .stat { min-width:calc(33.333% - 8px); padding:8px; font-size:13px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>🌈 Hành Trình Phiêu Lưu</h1>
+      <p class="subtitle">Chạy, nhảy và gom thật nhiều xu vàng!</p>
+    </div>
+    <div class="badge">⭐ Kỷ lục: <span id="bestTop">0</span></div>
+  </header>
+
+  <div class="gamebox">
+    <canvas id="game" width="960" height="540" aria-label="Trò chơi phiêu lưu 2D"></canvas>
+    <div class="hud">
+      <div class="stat">🪙 Điểm: <span id="score">0</span></div>
+      <div class="stat">❤️ Mạng: <span id="lives">3</span></div>
+      <div class="stat">🏁 Màn: <span id="level">1</span></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="startBtn">▶ Bắt đầu / Chơi lại</button>
+      <button class="secondary" id="soundBtn">🔊 Âm thanh: bật</button>
+      <button class="secondary" id="pauseBtn">⏸ Tạm dừng</button>
+    </div>
+    <div class="touch" aria-label="Điều khiển cảm ứng">
+      <div class="touchgroup">
+        <button id="leftBtn" aria-label="Sang trái">◀</button>
+        <button id="rightBtn" aria-label="Sang phải">▶</button>
+      </div>
+      <button class="jump" id="jumpBtn">⬆ NHẢY</button>
+    </div>
+  </div>
+  <p class="help">
+    <b>Máy tính:</b> phím ← → hoặc A/D để di chuyển, phím ↑ / W / Space để nhảy.
+    <b>Điện thoại:</b> dùng các nút bên dưới màn chơi. Thu thập xu, tránh quái vật và đừng rơi xuống hố nhé!
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="card">
+    <div style="font-size:48px" id="resultEmoji">🎉</div>
+    <h2 id="resultTitle">Bắt đầu phiêu lưu!</h2>
+    <p id="resultText">Thu thập xu vàng và vượt qua chướng ngại vật để ghi điểm.</p>
+    <button class="primary" id="overlayBtn">🚀 Chơi ngay</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const $ = id => document.getElementById(id);
+  const scoreEl = $('score'), livesEl = $('lives'), levelEl = $('level');
+  let score = 0, lives = 3, level = 1, best = Number(localStorage.getItem('adventureBest') || 0);
+  let running = false, paused = false, gameOver = false, soundOn = true;
+  let cameraX = 0, frame = 0, worldWidth = 6200;
+  let platforms = [], coins = [], enemies = [], particles = [];
+  const keys = { left:false, right:false, jump:false };
+  const player = { x:80, y:300, w:34, h:42, vx:0, vy:0, grounded:false, invincible:0, facing:1 };
+  $('bestTop').textContent = best;
+
+  let audioCtx = null;
+  function beep(freq=550, duration=.09, type='sine', volume=.04) {
+    if (!soundOn) return;
+    try {
+      audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = type; o.frequency.value = freq; g.gain.value = volume;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); g.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + duration);
+      o.stop(audioCtx.currentTime + duration);
+    } catch(e) {}
+  }
+  function makeWorld() {
+    platforms = [{x:0,y:458,w:520,h:100},{x:590,y:458,w:390,h:100},{x:1050,y:458,w:430,h:100}];
+    // Create a readable, hand-authored first stretch, then procedural platforms.
+    const fixed = [
+      [210,380,110],[390,330,100],[650,380,100],[800,320,100],[1080,370,110],
+      [1270,310,110],[1510,390,140],[1740,345,110],[1950,285,110],[2180,390,150],
+      [2440,335,120],[2670,275,100],[2890,390,130],[3150,340,120],[3380,285,100],
+      [3610,390,150],[3890,330,120],[4130,275,100],[4370,390,140],[4630,335,120],
+      [4870,275,110],[5110,390,150],[5400,330,120],[5660,280,120],[5910,390,220]
+    ];
+    fixed.forEach(([x,y,w]) => platforms.push({x,y,w,h:18}));
+    // Safe ground sections with gaps between them.
+    for (let x=1480; x<worldWidth; x+=460) platforms.push({x,y:458,w:300,h:100});
+    coins = [];
+    for (let x=145;x<worldWidth-100;x+=105) {
+      const y = 300 + (Math.sin(x*.018)+1)*65;
+      coins.push({x,y,r:11,taken:false});
+    }
+    // Extra reward trails over platforms.
+    fixed.forEach(([x,y,w]) => {
+      for (let i=0;i<3;i++) coins.push({x:x+22+i*28,y:y-30,r:10,taken:false});
+    });
+    enemies = [];
+    for (let x=720; x<worldWidth-200; x+=390) {
+      enemies.push({x, y:420, w:32, h:30, min:x-48, max:x+75, dir:1, alive:true});
+    }
+  }
+  function resetGame() {
+    score=0; lives=3; level=1; cameraX=0; frame=0; gameOver=false; paused=false;
+    player.x=80; player.y=300; player.vx=0; player.vy=0; player.grounded=false; player.invincible=0; player.facing=1;
+    particles=[]; makeWorld(); updateHud(); running=true; $('overlay').style.display='none';
+  }
+  function updateHud() {
+    scoreEl.textContent=score; livesEl.textContent=lives; levelEl.textContent=level;
+    if (score>best) { best=score; localStorage.setItem('adventureBest',best); $('bestTop').textContent=best; }
+  }
+  function showOverlay(title, text, emoji, button='🚀 Chơi lại') {
+    $('resultTitle').textContent=title; $('resultText').textContent=text; $('resultEmoji').textContent=emoji;
+    $('overlayBtn').textContent=button; $('overlay').style.display='flex';
+  }
+  function rects(a,b) { return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y; }
+  function burst(x,y,color,count=8) {
+    for(let i=0;i<count;i++) particles.push({x,y,vx:(Math.random()-.5)*5,vy:(Math.random()-.9)*-4,life:30,color});
+  }
+  function hurt() {
+    if(player.invincible>0) return;
+    lives--; player.invincible=100; player.vy=-8; player.vx=-player.facing*4;
+    beep(150,.22,'sawtooth',.05); burst(player.x+player.w/2,player.y+player.h/2,'#ff7797',12);
+    updateHud();
+    if(lives<=0) {
+      running=false; gameOver=true;
+      showOverlay('Hết lượt rồi!', `Bạn đạt ${score} điểm. Kỷ lục hiện tại: ${best} điểm. Thử lại để chinh phục hành trình nhé!`,'💫','🔁 Chơi lại');
+    }
+  }
+  function update() {
+    if(!running || paused || gameOver) return;
+    frame++;
+    const accel=.72, maxSpeed=5.1, friction=.82, gravity=.58;
+    if(keys.left) { player.vx-=accel; player.facing=-1; }
+    if(keys.right) { player.vx+=accel; player.facing=1; }
+    if(!keys.left && !keys.right) player.vx*=friction;
+    player.vx=Math.max(-maxSpeed,Math.min(maxSpeed,player.vx));
+    if(keys.jump && player.grounded) { player.vy=-12.4; player.grounded=false; beep(390,.08,'triangle',.035); }
+    player.vy=Math.min(13,player.vy+gravity);
+    const oldY=player.y;
+    player.x+=player.vx; player.y+=player.vy;
+    if(player.x<0) { player.x=0; player.vx=0; }
+    player.grounded=false;
+    for(const p of platforms) {
+      if(player.x+player.w>p.x && player.x<p.x+p.w &&
+         oldY+player.h<=p.y+5 && player.y+player.h>=p.y && player.vy>=0) {
+        player.y=p.y-player.h; player.vy=0; player.grounded=true;
+      }
+    }
+    // Keep player from moving through platform sides while rising.
+    for(const p of platforms) {
+      if(rects(player,p) && oldY>=p.y+p.h-2 && player.vy<0) { player.y=p.y+p.h; player.vy=1; }
+    }
+    // Collect coins.
+    for(const c of coins) if(!c.taken && Math.abs((player.x+player.w/2)-c.x)<c.r+player.w/2 && Math.abs((player.y+player.h/2)-c.y)<c.r+player.h/2) {
+      c.taken=true; score+=10; beep(760,.07,'sine',.035); burst(c.x,c.y,'#ffd34e',5); updateHud();
+    }
+    // Enemies move side to side; jumping on top defeats them.
+    for(const e of enemies) if(e.alive) {
+      e.x+=e.dir*1.25;
+      if(e.x<e.min || e.x>e.max) e.dir*=-1;
+      if(rects(player,e)) {
+        if(player.vy>1 && oldY+player.h<=e.y+9) {
+          e.alive=false; player.vy=-8.5; score+=25; beep(650,.12,'square',.035); burst(e.x+16,e.y,'#ff8db4',10); updateHud();
+        } else hurt();
+      }
+    }
+    if(player.y>H+80) { hurt(); if(lives>0){player.x=Math.max(20,cameraX+40);player.y=250;player.vy=0;} }
+    if(player.invincible>0) player.invincible--;
+    cameraX=Math.max(0,Math.min(worldWidth-W,player.x-W*.34));
+    level=Math.min(6,1+Math.floor(player.x/1050)); updateHud();
+    if(player.x>worldWidth-100) {
+      running=false; score+=100; updateHud();
+      showOverlay('Bạn đã về đích!','Xuất sắc! Bạn hoàn thành hành trình và nhận thêm 100 điểm thưởng. Sẵn sàng chơi lại để lập kỷ lục mới?','🏆','🔁 Chơi lại');
+    }
+    particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.12;p.life--;});
+    particles=particles.filter(p=>p.life>0);
+  }
+  function roundedRect(x,y,w,h,r,color) {
+    ctx.fillStyle=color; ctx.beginPath(); ctx.roundRect(x,y,w,h,r); ctx.fill();
+  }
+  function drawBackground() {
+    const sky=ctx.createLinearGradient(0,0,0,H); sky.addColorStop(0,'#8ce2ff'); sky.addColorStop(1,'#e3fbff'); ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+    // Sun
+    ctx.fillStyle='#fff3a3'; ctx.beginPath(); ctx.arc(820,85,39,0,Math.PI*2); ctx.fill();
+    // Clouds
+    for(let i=0;i<7;i++) {
+      const x=((i*190-cameraX*.22)%(W+160)+W+160)%(W+160)-60, y=55+(i%3)*48;
+      ctx.fillStyle='#ffffffd9'; ctx.beginPath(); ctx.arc(x,y,20,0,7);ctx.arc(x+24,y-9,27,0,7);ctx.arc(x+51,y,19,0,7);ctx.fill();
+    }
+    // Distant hills
+    ctx.fillStyle='#9cddb0';
+    for(let i=0;i<8;i++) { let x=i*180-cameraX*.38; ctx.beginPath();ctx.ellipse(x,440,150,125,0,Math.PI,Math.PI*2);ctx.fill(); }
+    // Trees
+    for(let i=0;i<25;i++) {
+      const wx=i*255+60, x=wx-cameraX*.72;
+      if(x < -80 || x>W+80) continue;
+      ctx.fillStyle='#9b6b4a';ctx.fillRect(x-7,365,14,95);
+      ctx.fillStyle=['#53c878','#41b96d','#72d982'][i%3];
+      ctx.beginPath();ctx.arc(x,350,34,0,7);ctx.arc(x-20,365,25,0,7);ctx.arc(x+20,367,25,0,7);ctx.fill();
+    }
+  }
+  function drawPlatform(p) {
+    const x=p.x-cameraX; if(x+p.w<0||x>W) return;
+    if(p.h>50) {
+      // Grass ground with a soft dirt face.
+      ctx.fillStyle='#9b714d';ctx.fillRect(x,p.y,p.w,p.h);
+      ctx.fillStyle='#6bd16e';ctx.fillRect(x,p.y,p.w,12);
+      ctx.fillStyle='#42b95b';ctx.fillRect(x,p.y+9,p.w,4);
+      for(let i=12;i<p.w;i+=27){ctx.fillStyle='#b98a5e';ctx.fillRect(x+i,p.y+25+(i%3)*8,8,4);}
+    } else {
+      roundedRect(x,p.y,p.w,p.h,7,'#b67b4f');
+      roundedRect(x,p.y,p.w,8,5,'#70d96b');
+      ctx.fillStyle='#4fbe5a';ctx.fillRect(x+5,p.y+7,p.w-10,3);
+    }
+  }
+  function drawCoin(c) {
+    if(c.taken) return;
+    const x=c.x-cameraX; if(x<-30||x>W+30)return;
+    const squish=.72+Math.abs(Math.sin(frame*.09+c.x))*.28;
+    ctx.save();ctx.translate(x,c.y);ctx.scale(squish,1);
+    ctx.fillStyle='#e9a51e';ctx.beginPath();ctx.arc(0,0,c.r+2,0,7);ctx.fill();
+    ctx.fillStyle='#ffd94f';ctx.beginPath();ctx.arc(0,0,c.r,0,7);ctx.fill();
+    ctx.strokeStyle='#fff4a8';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,c.r-4,0,7);ctx.stroke();
+    ctx.fillStyle='#fff4a8';ctx.fillRect(-2,-5,4,10);ctx.restore();
+  }
+  function drawEnemy(e) {
+    if(!e.alive)return; const x=e.x-cameraX;if(x<-50||x>W+50)return;
+    // Cute pink blob monster
+    ctx.fillStyle='#e95f96';ctx.beginPath();ctx.ellipse(x+16,e.y+17,16,14,0,Math.PI,Math.PI*2);ctx.lineTo(x+32,e.y+21);ctx.quadraticCurveTo(x+16,e.y+37,x,e.y+21);ctx.closePath();ctx.fill();
+    ctx.fillStyle='white';ctx.beginPath();ctx.arc(x+11,e.y+17,4,0,7);ctx.arc(x+22,e.y+17,4,0,7);ctx.fill();
+    ctx.fillStyle='#26364b';ctx.beginPath();ctx.arc(x+12,e.y+18,2,0,7);ctx.arc(x+23,e.y+18,2,0,7);ctx.fill();
+    ctx.strokeStyle='#a83e70';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+12,e.y+26);ctx.quadraticCurveTo(x+17,e.y+30,x+22,e.y+26);ctx.stroke();
+  }
+  function drawPlayer() {
+    if(player.invincible>0 && Math.floor(frame/5)%2===0)return;
+    const x=player.x-cameraX,y=player.y;
+    // feet
+    roundedRect(x+4,y+31,11,10,4,'#384b75');roundedRect(x+20,y+31,11,10,4,'#384b75');
+    // body
+    roundedRect(x+3,y+12,29,25,8,'#ffb347');
+    // shirt
+    roundedRect(x+4,y+22,27,14,5,'#4e9cff');
+    // face
+    ctx.fillStyle='#ffd3a6';ctx.beginPath();ctx.arc(x+17,y+13,13,0,7);ctx.fill();
+    // hair
+    ctx.fillStyle='#5b3a2b';ctx.beginPath();ctx.arc(x+17,y+8,13,Math.PI,Math.PI*2);ctx.lineTo(x+30,y+13);ctx.lineTo(x+25,y+11);ctx.lineTo(x+20,y+14);ctx.lineTo(x+10,y+12);ctx.lineTo(x+4,y+15);ctx.closePath();ctx.fill();
+    // eye
+    ctx.fillStyle='#24324a';ctx.beginPath();ctx.arc(x+(player.facing>0?22:12),y+14,2,0,7);ctx.fill();
+    // smile
+    ctx.strokeStyle='#a65f4d';ctx.lineWidth=1.7;ctx.beginPath();ctx.arc(x+17,y+16,5,.2,1.8);ctx.stroke();
+    // little backpack
+    roundedRect(x+(player.facing>0?-2:27),y+20,7,12,3,'#ff6b83');
+  }
+  function draw() {
+    drawBackground();
+    // gaps are the sky showing between ground segments.
+    platforms.forEach(drawPlatform);
+    coins.forEach(drawCoin);
+    enemies.forEach(drawEnemy);
+    particles.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life/30);ctx.fillStyle=p.color;ctx.fillRect(p.x-cameraX,p.y,5,5);ctx.globalAlpha=1;});
+    drawPlayer();
+    // Finish flag
+    const fx=worldWidth-100-cameraX;
+    if(fx>-30&&fx<W+30) {
+      ctx.fillStyle='#ffffff';ctx.fillRect(fx,300,5,158);
+      ctx.fillStyle='#ff668a';ctx.beginPath();ctx.moveTo(fx+5,303);ctx.lineTo(fx+70,323);ctx.lineTo(fx+5,345);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#ffffff';ctx.font='bold 16px system-ui';ctx.fillText('ĐÍCH',fx+12,329);
+    }
+    if(!running && !gameOver && !$('overlay').style.display.includes('flex')) {
+      ctx.fillStyle='#1c365a';ctx.font='bold 30px system-ui';ctx.textAlign='center';ctx.fillText('Nhấn “Bắt đầu” để phiêu lưu!',W/2,H/2);ctx.textAlign='left';
+    }
+    if(paused && running) {
+      ctx.fillStyle='#1b2b4070';ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='white';ctx.font='bold 42px system-ui';ctx.textAlign='center';ctx.fillText('TẠM DỪNG',W/2,H/2);ctx.textAlign='left';
+    }
+  }
+  function loop(){ update(); draw(); requestAnimationFrame(loop); }
+  function setKey(e,down) {
+    const k=e.key.toLowerCase();
+    if(['arrowleft','arrowright','arrowup',' ','a','d','w'].includes(k)) e.preventDefault();
+    if(k==='arrowleft'||k==='a')keys.left=down;
+    if(k==='arrowright'||k==='d')keys.right=down;
+    if(k==='arrowup'||k==='w'||k===' ')keys.jump=down;
+    if(down && (k==='arrowup'||k==='w'||k===' ')) { /* jump handled in update */ }
+    if(down && k==='escape' && running) { paused=!paused; $('pauseBtn').textContent=paused?'▶ Tiếp tục':'⏸ Tạm dừng'; }
+  }
+  window.addEventListener('keydown',e=>setKey(e,true));
+  window.addEventListener('keyup',e=>setKey(e,false));
+  window.addEventListener('blur',()=>{keys.left=keys.right=keys.jump=false;});
+  function bindHold(id,key) {
+    const el=$(id);
+    const down=e=>{e.preventDefault();keys[key]=true;};
+    const up=e=>{e.preventDefault();keys[key]=false;};
+    el.addEventListener('pointerdown',down);el.addEventListener('pointerup',up);
+    el.addEventListener('pointercancel',up);el.addEventListener('pointerleave',up);
+  }
+  bindHold('leftBtn','left');bindHold('rightBtn','right');bindHold('jumpBtn','jump');
+  $('startBtn').addEventListener('click',()=>{resetGame();beep(520,.08);});
+  $('overlayBtn').addEventListener('click',()=>{resetGame();beep(520,.08);});
+  $('soundBtn').addEventListener('click',()=>{soundOn=!soundOn;$('soundBtn').textContent=soundOn?'🔊 Âm thanh: bật':'🔇 Âm thanh: tắt';if(soundOn)beep(600,.08);});
+  $('pauseBtn').addEventListener('click',()=>{
+    if(!running)return;
+    paused=!paused;$('pauseBtn').textContent=paused?'▶ Tiếp tục':'⏸ Tạm dừng';
+  });
+  makeWorld();
+  draw();
+  showOverlay('Sẵn sàng phiêu lưu?','Chạy thật khéo, nhảy qua quái vật màu hồng và thu thập xu vàng. Mỗi xu được 10 điểm!','🌈','🚀 Bắt đầu chơi');
+  loop();
+})();
+</script>
+</body>
+</html>
